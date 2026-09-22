@@ -26,6 +26,10 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
+  while (!Serial) {
+    delay(10); 
+  }
+  
   // Uses the default SPI bus and this platform's default SPI clock
   // (2 MHz on AVR, 4 MHz elsewhere). To use a non-default bus, e.g.
   // ESP32 HSPI:  SPIClass hspi(HSPI); hspi.begin(14,12,13,-1);
