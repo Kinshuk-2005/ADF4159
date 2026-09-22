@@ -1,0 +1,62 @@
+#######################################
+# Syntax Coloring Map for ADF4159
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+ADF4159	KEYWORD1
+ADF4159_RampMode	KEYWORD1
+ADF4159_MuxOut	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+writeRegister	KEYWORD2
+setR0	KEYWORD2
+setR1	KEYWORD2
+setR2	KEYWORD2
+setR3	KEYWORD2
+setR4	KEYWORD2
+setR5	KEYWORD2
+setR6	KEYWORD2
+setR7	KEYWORD2
+writeFullSequence	KEYWORD2
+updateFrequencyOnly	KEYWORD2
+setFrequency	KEYWORD2
+configureSawtoothRamp	KEYWORD2
+configureTriangleRamp	KEYWORD2
+configureFMCWChirp	KEYWORD2
+configureFSK	KEYWORD2
+configurePSK	KEYWORD2
+activateRamp	KEYWORD2
+deactivateRamp	KEYWORD2
+enableCycleSlipReduction	KEYWORD2
+disableCycleSlipReduction	KEYWORD2
+powerDown	KEYWORD2
+powerUp	KEYWORD2
+getPFDFrequency	KEYWORD2
+getResolution	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+ADF4159_RAMP_CONT_SAWTOOTH	LITERAL1
+ADF4159_RAMP_CONT_TRIANGLE	LITERAL1
+ADF4159_RAMP_SINGLE_SAWTOOTH_BURST	LITERAL1
+ADF4159_RAMP_SINGLE_RAMP_BURST	LITERAL1
+ADF4159_MUX_THREE_STATE	LITERAL1
+ADF4159_MUX_DVDD	LITERAL1
+ADF4159_MUX_DGND	LITERAL1
+ADF4159_MUX_RDIV_OUT	LITERAL1
+ADF4159_MUX_NDIV_OUT	LITERAL1
+ADF4159_MUX_LOCK_DETECT	LITERAL1
+ADF4159_MUX_SDO	LITERAL1
+ADF4159_MUX_CLKDIV_OUT	LITERAL1
+ADF4159_MUX_RDIV_DIV2	LITERAL1
+ADF4159_MUX_NDIV_DIV2	LITERAL1
+ADF4159_MUX_READBACK	LITERAL1
