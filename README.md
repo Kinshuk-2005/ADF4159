@@ -4,7 +4,7 @@ Arduino library for the Analog Devices [ADF4159](https://www.analog.com/ADF4159)
 a 13 GHz direct-modulation / fast-waveform-generating fractional-N frequency
 synthesizer with FMCW ramp, FSK and PSK support.
 
-## WARNING - As I do not have the actual hardware, the library has only been tested using emulation - making one ESP32 as master and other as mock ADF4159. Use this library at your own risk. I will be really grateful to anyone who will test this library on actual hardware and I will be really grateful for any feedback
+### WARNING - As I do not have the actual hardware, the library has only been tested using emulation - making one ESP32 as master and other as mock ADF4159. Use this library at your own risk. I will be really grateful to anyone who can test this library on actual hardware and I will be really grateful for any feedback
 
 Supports **AVR** (Uno/Nano/Mega), **ESP32**, **Teensy**, **STM32**, and
 **Raspberry Pi Pico (RP2040)** — any Arduino-core board with a hardware
