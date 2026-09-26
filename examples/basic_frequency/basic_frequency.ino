@@ -34,7 +34,7 @@ void setup() {
   // (2 MHz on AVR, 4 MHz elsewhere). To use a non-default bus, e.g.
   // ESP32 HSPI:  SPIClass hspi(HSPI); hspi.begin(14,12,13,-1);
   //              synth.begin(LE_PIN, REFIN_HZ, hspi);
-  synth.begin(LE_PIN, REFIN_HZ);
+  synth.begin(LE_PIN, REFIN_HZ, SPI, 200000UL); // The last parameter is SPI frequency - it is set low for testing purposes
 
   bool ok = synth.setFrequency(RFOUT_HZ);
 
