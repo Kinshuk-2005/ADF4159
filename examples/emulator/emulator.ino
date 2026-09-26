@@ -2,9 +2,18 @@
   emulator.ino
 
   Emulates the ADF4159's 3-wire register-write interface (CLK, DATA, LE)
-  on a second ESP32, so you can test the ADF4159 controller library
+  on a second board, so you can test the ADF4159 controller library
   (this repo's ADF4159.h/.cpp) against something other than the real
   chip - no RF hardware needed to exercise the SPI/register logic.
+
+  This single sketch runs unmodified as the emulator on EITHER an ESP32
+  or a Raspberry Pi Pico (RP2040) - pin numbers and the ISR-attribute
+  macro below are selected automatically based on which board you
+  compile it for in the Arduino IDE. It works as the emulator no matter
+  what's controlling it (an ESP32 or a Pico both running this repo's
+  ADF4159 library, since RP2040 is already one of the architectures
+  that library supports directly - no separate "Pico controller" sketch
+  is needed for that role).
 
   This does NOT emulate RF output, MUXOUT, or readback. It only
   captures every 32-bit word the controller shifts in, decodes which
@@ -24,34 +33,68 @@
   SPI slave transaction (CS low-for-duration, not low-then-pulse-high-
   after), so this sketch just uses two GPIO interrupts - one on CLK to
   shift bits in, one on LE's rising edge to latch and flag a complete
-  word - rather than the ESP32's SPI slave peripheral.
+  word - rather than either board's SPI slave/peripheral hardware.
 
   Because this is interrupt-driven, keep the controller's SPI clock
   modest for reliable capture. On the controller side:
       synth.begin(LE_PIN, REFIN_HZ, SPI, 200000UL); // 200 kHz
   The library's default (2-4 MHz) is too fast for interrupt-based
-  sampling on the Arduino framework to reliably keep up with.
+  sampling on the Arduino framework to reliably keep up with, on
+  either board.
 
   ---------------------------------------------------------------
-  WIRING (ESP32 <-> ESP32)
+  WIRING
   ---------------------------------------------------------------
-  Both boards are 3.3V logic, so - unlike the real ADF4159, which is
-  1.8V logic and needs a level shifter - these connect directly:
+  ESP32 and RP2040 are both 3.3V logic, so any ESP32<->ESP32,
+  ESP32<->Pico, or Pico<->Pico pairing connects directly - no level
+  shifter needed. (The real ADF4159 chip is 1.8V logic and DOES need
+  one - that requirement is about the real chip, not about any of
+  these board-to-board test pairings.)
 
-    Controller ESP32              Emulator ESP32 (this sketch)
+    Controller                    Emulator (this sketch)
     -----------------------       -----------------------------
     LE_PIN (per library call) --> PIN_LE
     SPI SCK                   --> PIN_CLK
     SPI MOSI                  --> PIN_DATA
     GND                       --- GND   (must be common to both boards)
 
+  If the controller is an ESP32: SCK=GPIO18, MOSI=GPIO23 by default
+  (unless you remapped the SPI bus - see the "Multiple SPI buses"
+  section of the library README).
+
+  If the controller is a Pico: SCK=GP18, MOSI=GP19 by default (the
+  arduino-pico core's default SPI0 pins) - just call synth.begin() the
+  same way as on ESP32, since RP2040 is already a supported
+  architecture; no separate controller sketch is needed for that role.
+  Pick any free GPIO (e.g. GP5) for LE_PIN.
+
+  Emulator pin numbers below (PIN_CLK/PIN_DATA/PIN_LE) are chosen per
+  board: on a Pico, GPIO23-25/29 aren't broken out to header pins on
+  the official board, so this sketch uses low-numbered, always-exposed
+  GPIOs there instead of reusing the ESP32 pin numbers.
+
   MOSI only, one direction - this sketch never drives DATA back, so
   there's no MISO wiring to worry about.
 */
 
-const int PIN_CLK  = 18;
-const int PIN_DATA = 23;
-const int PIN_LE   = 5;
+#if defined(ARDUINO_ARCH_RP2040)
+  const int PIN_CLK  = 2;
+  const int PIN_DATA = 3;
+  const int PIN_LE   = 4;
+#else // ESP32 (default)
+  const int PIN_CLK  = 18;
+  const int PIN_DATA = 23;
+  const int PIN_LE   = 5;
+#endif
+
+// IRAM_ATTR is an ESP32-specific macro (keeps the ISR out of flash, to
+// avoid a conflict when flash is briefly disabled during flash access).
+// RP2040 doesn't need or define it, so this expands to nothing there.
+#if defined(ESP32)
+  #define ISR_ATTR IRAM_ATTR
+#else
+  #define ISR_ATTR
+#endif
 
 // Set this to whatever REFIN your controller sketch is actually using,
 // so the emulator can decode an approximate RFOUT, not just raw bits.
@@ -68,14 +111,14 @@ volatile bool wordReady = false;
 double lastFPFD = 0;
 uint16_t lastFracLsb = 0;
 
-void IRAM_ATTR onClkRising() {
+void ISR_ATTR onClkRising() {
   int bit = digitalRead(PIN_DATA);
   bitBuffer = (bitBuffer << 1) | (uint32_t)bit;
   bitCount++;
   if (bitCount > 32) bitCount = 32; // clamp; a full word is always 32 clocks
 }
 
-void IRAM_ATTR onLeRising() {
+void ISR_ATTR onLeRising() {
   if (bitCount == 32) {
     latchedWord = bitBuffer;
     wordReady = true;
