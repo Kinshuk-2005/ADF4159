@@ -8,35 +8,6 @@ Supports **AVR** (Uno/Nano/Mega), **ESP32**, **Teensy**, **STM32**, and
 **Raspberry Pi Pico (RP2040)** — any Arduino-core board with a hardware
 `SPIClass` object.
 
-### WARNING - As I do not have the actual hardware, the library has only been tested using emulation - making one ESP32 as master and other as mock ADF4159. Use this library at your own risk. I will be really grateful to anyone who can test this library on actual hardware and I will be really grateful for any feedback
-
-### Why frequencies are integer Hz, not `double`
-
-On AVR, `double` is the same 32-bit type as `float` (~24-bit mantissa),
-which cannot represent a 12 GHz value to better than ~1 kHz — the number
-itself would round before any register math runs. To keep frequency
-synthesis exact on every platform (AVR included), `setFrequency()` and
-the ramp/chirp start/stop arguments take `uint64_t` Hz, and the INT/FRAC
-split is computed with pure 64-bit integer arithmetic — no floating
-point in that path at all. Deviation (FSK/PSK/ramp step size) and ramp
-timing remain `double`, since those don't need sub-Hz precision.
-
-### Multiple SPI buses
-
-ESP32 (VSPI/HSPI), Teensy (SPI/SPI1/SPI2), STM32, and RP2040 (SPI0/SPI1)
-can expose more than one hardware SPI peripheral. `begin()` takes an
-`SPIClass&` (defaults to the global `SPI`):
-
-```cpp
-SPIClass hspi(HSPI);              // ESP32 example
-hspi.begin(14, 12, 13, -1);
-synth.begin(LE_PIN, refHz, hspi); // pass initSPI=false if you already called hspi.begin()
-```
-
-Default SPI clock is 2 MHz on AVR, 4 MHz elsewhere (both are well under
-the datasheet's 20 MHz write-timing limit); override via the `spiHz`
-parameter.
-
 ## Hardware
 
 | Pin | Role |
@@ -77,7 +48,11 @@ between your MCU and every digital pin on the ADF4159:
   too, or read it through a comparator.
 
 This library has no way to detect or enforce correct logic levels in
-software — get this right in hardware before applying power.
+software — get this right in hardware before applying power. (This
+warning is specific to the real ADF4159 chip. If you're testing against
+the software emulator in `examples/emulator/`, both boards in that
+pairing are 3.3 V logic and connect directly — see that example's
+comments.)
 
 ### Single-ended vs. differential RF input
 
@@ -125,13 +100,13 @@ Generic pin-role mapping (fill in real GPIO numbers for your board):
 | MUXOUT | any MCU GPIO (input), via level shifter | optional: lock detect / readback |
 | REFIN | your reference oscillator/TCXO output | 10–260 MHz, AC- or DC-coupled per datasheet |
 | RFINA | VCO output, AC-coupled | 0.5–13 GHz |
-| RFINB | 100 pF to ground (single-ended) or driven differentially | see note below |
+| RFINB | 100 pF to ground (single-ended) or driven differentially | see note above |
 | AVDD, VP | 2.7–3.45 V analog supply | decouple close to the pins |
 | DVDD, SDVDD | 1.62–1.98 V digital supply | decouple close to the pins |
 | AGND, DGND, CPGND, SDGND, exposed pad | common ground | tie together, connect exposed pad to AGND |
 
 Board-specific SPI pins (SCK/MOSI) and how to instantiate a second SPI
-bus are covered in the "Multiple SPI buses" section above — those are
+bus are covered in the "Multiple SPI buses" section below — those are
 the only genuinely per-microcontroller details.
 
 ## Register write sequence
@@ -157,6 +132,35 @@ needs `R1 -> R0`, since FRAC/INT are double-buffered. `setFrequency()`
 uses this fast path automatically after its first call — **no power-down
 or power-up cycle happens on any update.**
 
+## Multi-platform notes
+
+### Why frequencies are integer Hz, not `double`
+
+On AVR, `double` is the same 32-bit type as `float` (~24-bit mantissa),
+which cannot represent a 12 GHz value to better than ~1 kHz — the number
+itself would round before any register math runs. To keep frequency
+synthesis exact on every platform (AVR included), `setFrequency()` and
+the ramp/chirp start/stop arguments take `uint64_t` Hz, and the INT/FRAC
+split is computed with pure 64-bit integer arithmetic — no floating
+point in that path at all. Deviation (FSK/PSK/ramp step size) and ramp
+timing remain `double`, since those don't need sub-Hz precision.
+
+### Multiple SPI buses
+
+ESP32 (VSPI/HSPI), Teensy (SPI/SPI1/SPI2), STM32, and RP2040 (SPI0/SPI1)
+can expose more than one hardware SPI peripheral. `begin()` takes an
+`SPIClass&` (defaults to the global `SPI`):
+
+```cpp
+SPIClass hspi(HSPI);              // ESP32 example
+hspi.begin(14, 12, 13, -1);
+synth.begin(LE_PIN, refHz, hspi); // pass initSPI=false if you already called hspi.begin()
+```
+
+Default SPI clock is 2 MHz on AVR, 4 MHz elsewhere (both are well under
+the datasheet's 20 MHz write-timing limit); override via the `spiHz`
+parameter.
+
 ## Quick start
 
 ```cpp
@@ -168,6 +172,7 @@ ADF4159 synth;
 void setup() {
   synth.begin(/* LE pin */ 5, /* REFIN Hz */ 100000000UL);
   synth.setFrequency(12002000000ULL); // 12.002 GHz, exact integer Hz
+  synth.printStatus(); // dump every register + decoded field + RFOUT/fPFD
 }
 ```
 
@@ -176,6 +181,9 @@ void setup() {
 - `begin(lePin, refInHz, spiPort=SPI, spiHz=platform default, initSPI=true)`
 - `writeRegister(uint32_t value)` — raw 32-bit SPI write + LE pulse
 - `setR0`..`setR7(...)` — stage individual register fields (call `writeFullSequence()` to commit)
+- `getR0()`..`getR7()` — return the raw 32-bit words currently staged in this library's memory (not a live SPI read from the chip — the ADF4159's 3-wire interface is write-mostly; see `readFrequency()` for the one thing it can actually read back)
+- `readStatus()` — returns an `ADF4159_Status` struct with every raw register, every decoded field (INT/FRAC, ramp mode, deviation words for both ramp latches, CP current index, delay words, etc.), and derived values (current RFOUT, fPFD, frequency resolution)
+- `printStatus(out=Serial)` — dumps `readStatus()` to any `Print` target in human-readable form
 - `writeFullSequence()` / `updateFrequencyOnly()`
 - `setFrequency(freqHz, rCounter=1, doubler=false, rdiv2=false)` — `freqHz` is `uint64_t`
 - `configureSawtoothRamp(startFreq, stopFreq, numSteps, stepTimeUs, continuous=true)` — Hz args are `uint64_t`
@@ -195,12 +203,22 @@ void setup() {
 - `powerDown()` / `powerUp()`
 - `getPFDFrequency()` / `getResolution()`
 
+## Testing without RF hardware
+
+`examples/emulator/emulator.ino` emulates the chip's 3-wire register
+interface on a second board (ESP32 or Pico) — it decodes and prints
+every register write it receives, with no RF hardware needed. See the
+comments in that file for wiring between two boards in either
+controller/emulator role, and how to set a slow enough `spiHz` for
+reliable interrupt-based capture.
+
 ## Examples
 
-- `basic_frequency` — lock to a fixed RF output
+- `basic_frequency` — lock to a fixed RF output, print full status
 - `chirp` — continuous sawtooth FMCW chirp (datasheet worked example: 5800–5850 MHz / 2 ms)
 - `fsk` — frequency shift keying via TXDATA
 - `psk` — phase shift keying via TXDATA
+- `emulator` — chip emulator for SPI/register testing without RF hardware (ESP32 and Pico)
 
 ## Datasheet
 
@@ -215,8 +233,7 @@ from:
 Register bit positions, timing figures, and pin voltage limits referenced
 throughout this README and the library source come directly from that
 document — refer to it for anything not covered here (e.g. loop filter
-design, spur mechanisms, or the fast-lock/parabolic/dual-ramp modes not
-yet wrapped by a high-level function).
+design, spur mechanisms, or PCB layout guidelines).
 
 ## License
 
