@@ -15,12 +15,12 @@
   that library supports directly - no separate "Pico controller" sketch
   is needed for that role).
 
-  This does NOT emulate RF output, MUXOUT, or readback. It only
-  captures every 32-bit word the controller shifts in, decodes which
-  register it targets, prints every field, and (once it has seen an R2
-  and R1 write) prints the resulting approximate RFOUT whenever an R0
-  write arrives - mirroring the real chip's double-buffered behaviour
-  where R0 is what actually finalizes a frequency change.
+  This does NOT emulate RF output, MUXOUT, or readback. Every time it
+  receives a 32-bit write, it updates its own shadow copy of all 8
+  registers and prints a FULL snapshot: every register's raw hex value,
+  plus every register fully decoded (R0-R7) - not just the one that was
+  just written - so you always see the complete current configuration,
+  mirroring the controller library's own printStatus().
 
   ---------------------------------------------------------------
   WHY THIS IS BIT-BANGED, NOT HARDWARE SPI
@@ -105,11 +105,11 @@ volatile int bitCount = 0;
 volatile uint32_t latchedWord = 0;
 volatile bool wordReady = false;
 
-// Cached fields needed to decode R0 into an actual frequency - R1 (FRAC
-// LSB) and R2 (fPFD) are always written before R0 in the real write
-// sequence, so by the time R0 arrives these are already current.
-double lastFPFD = 0;
-uint16_t lastFracLsb = 0;
+// Shadow copy of all 8 registers, indexed by control bits (R0..R7).
+// Updated on every write; printAllRegisters() decodes the whole set
+// together so you always see the complete current configuration, not
+// just whichever register happened to arrive most recently.
+uint32_t regs[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 void ISR_ATTR onClkRising() {
   int bit = digitalRead(PIN_DATA);
@@ -138,7 +138,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIN_CLK), onClkRising, RISING);
   attachInterrupt(digitalPinToInterrupt(PIN_LE), onLeRising, RISING);
 
-  Serial.println("ADF4159 emulator ready - waiting for register writes...");
+  Serial.println(F("ADF4159 emulator ready - waiting for register writes..."));
 }
 
 void loop() {
@@ -149,7 +149,7 @@ void loop() {
     wordReady = false;
     interrupts();
 
-    decodeAndPrint(word);
+    onWordReceived(word);
   }
 }
 
@@ -163,24 +163,42 @@ int32_t signExtend(uint32_t value, int bits) {
   return (int32_t)((value ^ signBit) - signBit);
 }
 
-void decodeAndPrint(uint32_t w) {
+void onWordReceived(uint32_t w) {
   uint8_t ctrl = w & 0x7; // C3 C2 C1 = DB[2:0]
+  regs[ctrl] = w;
 
-  Serial.println(F("----------------------------------------"));
-  Serial.print(F("RAW: 0x"));
-  Serial.println(w, HEX);
+  Serial.println(F("=========================================="));
+  Serial.print(F("New write -> R")); Serial.print(ctrl);
+  Serial.print(F(" = 0x")); Serial.println(w, HEX);
+  Serial.println();
 
-  switch (ctrl) {
-    case 0b000: printR0(w); break;
-    case 0b001: printR1(w); break;
-    case 0b010: printR2(w); break;
-    case 0b011: printR3(w); break;
-    case 0b100: printR4(w); break;
-    case 0b101: printR5(w); break;
-    case 0b110: printR6(w); break;
-    case 0b111: printR7(w); break;
-  }
+  printAllRegisters();
 }
+
+void printAllRegisters() {
+  Serial.println(F("---- Raw register snapshot ----"));
+  for (int i = 0; i < 8; i++) {
+    Serial.print(F("R")); Serial.print(i);
+    Serial.print(F(": 0x")); Serial.println(regs[i], HEX);
+  }
+  Serial.println();
+
+  Serial.println(F("---- Decoded (all registers) ----"));
+  // R2 then R1 first, since printR0()'s RFOUT calculation depends on
+  // fPFD (from R2) and FRAC_LSB (from R1) being current.
+  printR2(regs[2]);
+  printR1(regs[1]);
+  printR0(regs[0]);
+  printR3(regs[3]);
+  printR4(regs[4]);
+  printR5(regs[5]);
+  printR6(regs[6]);
+  printR7(regs[7]);
+  Serial.println();
+}
+
+double lastFPFD = 0;
+uint16_t lastFracLsb = 0;
 
 void printR0(uint32_t w) {
   bool rampOn    = (w >> 31) & 0x1;
@@ -208,7 +226,7 @@ void printR1(uint32_t w) {
   uint16_t fLsb  = (w >> 15) & 0x1FFF;
   int32_t phase  = signExtend((w >> 3) & 0xFFF, 12);
 
-  lastFracLsb = fLsb; // cached for the next R0 decode
+  lastFracLsb = fLsb; // cached for the R0 decode above
 
   Serial.println(F("REGISTER R1 (LSB FRAC)"));
   Serial.print(F("  PHASE_ADJ_EN : ")); Serial.println(phaseEn);
