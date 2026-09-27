@@ -8,7 +8,7 @@ Supports **AVR** (Uno/Nano/Mega), **ESP32**, **Teensy**, **STM32**, and
 **Raspberry Pi Pico (RP2040)** — any Arduino-core board with a hardware
 `SPIClass` object.
 
-## WARNING - The code has only been tested using a hardware emulator - one ESP32 was set as controller and another was made to behave as an ADF4159 emulator that simply takes the SPI values and shows R0 and R2. The code has not been tested on actual hardware. Use this library at your own risk. I will be grateful to any one who can test this library on actual hardware and I am more than happy to receive any feedback.
+### WARNING - The code has only been tested using a hardware emulator - one ESP32 was set as controller and another was made to behave as an ADF4159 emulator that simply takes the SPI values and shows R0 and R2. The code has not been tested on actual hardware. Use this library at your own risk. I will be grateful to any one who can test this library on actual hardware and I am more than happy to receive any feedback.
 
 ## Hardware
 
